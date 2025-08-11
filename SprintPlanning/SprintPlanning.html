@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Sprint Capacity & Velocity Planner</title>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- html2pdf (bundles html2canvas + jsPDF) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+
+  <!-- Print/PDF tweaks -->
+  <style>
+    /* A4 page with small margins for PDF export */
+    @page { size: A4; margin: 14mm; }
+    @media print {
+      canvas, section, header, table { break-inside: avoid; page-break-inside: avoid; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900">
+  <div class="max-w-6xl mx-auto p-6 space-y-6" id="pageRoot">
+    <header class="flex items-center justify-between">
+      <h1 class="text-2xl font-bold">Sprint Capacity & Velocity Planner</h1>
+      <div class="text-sm text-slate-500">All local. No install.</div>
+    </header>
+
+    <!-- Basics & Productivity -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Basics -->
+      <div class="bg-white rounded-2xl shadow p-5 space-y-4">
+        <h2 class="font-semibold">Sprint Basics & Team</h2>
+        <div class="grid grid-cols-3 gap-3 items-center">
+          <label>Working days</label>
+          <input id="sprintDays" type="number" min="1" max="60" value="10" class="col-span-2 border rounded px-3 py-2">
+          <label>Focus</label>
+          <input id="focus" type="range" min="0.5" max="1" step="0.05" value="0.8" class="col-span-2">
+          <div></div>
+          <div id="focusLabel" class="col-span-2 text-sm text-slate-500">80%</div>
+          <label>Developers</label>
+          <input id="teamSize" type="number" min="1" max="50" value="5" class="col-span-2 border rounded px-3 py-2">
+        </div>
+        <button id="autofill" class="mt-2 text-sm px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">Autofill names</button>
+      </div>
+
+      <!-- Productivity -->
+      <div class="bg-white rounded-2xl shadow p-5 space-y-4">
+        <h2 class="font-semibold">Productivity Model</h2>
+        <div class="grid grid-cols-3 gap-3 items-center">
+          <label>Mode</label>
+          <select id="mode" class="col-span-2 border rounded px-3 py-2">
+            <option value="historical">Historical</option>
+            <option value="assumed">Assumed</option>
+          </select>
+
+          <label>Historical velocity (SP)</label>
+          <input id="histVelocity" type="number" min="0" value="60" class="col-span-2 border rounded px-3 py-2">
+          <label>Historical devs</label>
+          <input id="histDevs" type="number" min="1" value="5" class="col-span-2 border rounded px-3 py-2">
+          <label>Historical days</label>
+          <input id="histDays" type="number" min="1" value="10" class="col-span-2 border rounded px-3 py-2">
+          <label>Hist. focus</label>
+          <input id="histFocus" type="range" min="0.5" max="1" step="0.05" value="0.8" class="col-span-2">
+          <div></div>
+          <div id="histFocusLabel" class="col-span-2 text-sm text-slate-500">80%</div>
+
+          <label>Assumed PPD</label>
+          <input id="assumedPpd" type="number" min="0" step="0.1" value="1.5" class="col-span-2 border rounded px-3 py-2">
+          <label>Avg story (SP)</label>
+          <input id="avgStory" type="number" min="0.5" step="0.5" value="5" class="col-span-2 border rounded px-3 py-2">
+        </div>
+      </div>
+    </section>
+
+    <!-- Developers -->
+    <section class="bg-white rounded-2xl shadow p-5">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold mb-3">Developers & Vacation Days</h2>
+        <div class="no-print flex gap-2">
+          <button id="calcTop" class="px-3 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 text-sm">Calculate</button>
+          <button id="exportCsvTop" class="px-3 py-2 rounded border border-slate-300 hover:bg-slate-50 text-sm">Export CSV</button>
+          <button id="exportPdfTop" class="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 text-sm">Export PDF</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm" id="devTable">
+          <thead>
+            <tr class="text-left text-slate-600">
+              <th class="py-2">#</th>
+              <th class="py-2">Name</th>
+              <th class="py-2">Vacation days</th>
+              <th class="py-2">Avail. dev-days</th>
+            </tr>
+          </thead>
+          <tbody id="devBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Results + Charts -->
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="bg-white rounded-2xl shadow p-5 space-y-3">
+        <h2 class="font-semibold">Results</h2>
+        <p id="notes" class="text-sm text-slate-600"></p>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <div class="text-xs text-slate-500">Effective capacity (dev-days)</div>
+            <div id="effectiveCapacity" class="text-xl font-semibold">–</div>
+          </div>
+          <div>
+            <div class="text-xs text-slate-500">Points per dev-day</div>
+            <div id="ppd" class="text-xl font-semibold">–</div>
+          </div>
+          <div>
+            <div class="text-xs text-slate-500">Recommended story points</div>
+            <div id="recommendedPoints" class="text-xl font-semibold">–</div>
+          </div>
+          <div>
+            <div class="text-xs text-slate-500">Suggested number of stories</div>
+            <div id="suggestedStories" class="text-xl font-semibold">–</div>
+          </div>
+        </div>
+        <div class="no-print flex gap-2 pt-2">
+          <button id="calc" class="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700">Calculate</button>
+          <button id="exportCsv" class="px-4 py-2 rounded border border-slate-300 hover:bg-slate-50">Export CSV</button>
+          <button id="exportPdf" class="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Export PDF</button>
+          <button id="printPdf" class="px-4 py-2 rounded bg-slate-700 text-white hover:bg-slate-800">Print</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow p-5 space-y-4">
+        <h2 class="font-semibold">Charts</h2>
+        <canvas id="availChart" height="150"></canvas>
+        <canvas id="pointsChart" height="150"></canvas>
+      </div>
+    </section>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const state = { devs: [] };
+
+function setTeamSize(n) {
+  n = Math.max(1, Number(n)||1);
+  const curr = state.devs.length;
+  if (n > curr) for (let i=curr; i<n; i++) state.devs.push({ name:`Dev ${i+1}`, vac:0, avail:0 });
+  else if (n < curr) state.devs.splice(n);
+  renderDevRows();
+}
+
+function renderDevRows() {
+  const tbody = $('devBody');
+  tbody.innerHTML = '';
+  state.devs.forEach((d, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="py-2 pr-3 text-slate-500">${i+1}</td>
+      <td class="py-2 pr-3">
+        <input class="border rounded px-2 py-1 w-48" value="${d.name}" data-i="${i}" data-k="name">
+      </td>
+      <td class="py-2 pr-3">
+        <input type="number" min="0" class="border rounded px-2 py-1 w-32" value="${d.vac}" data-i="${i}" data-k="vac">
+      </td>
+      <td class="py-2 pr-3 text-slate-700" id="avail-${i}">–</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('input', e=>{
+      const i = Number(e.target.dataset.i);
+      const k = e.target.dataset.k;
+      if (k==='name') state.devs[i].name = e.target.value;
+      else state.devs[i].vac = Number(e.target.value)||0;
+      calc();
+    });
+  });
+  calc();
+}
+
+function ppdFromHistorical() {
+  const v = Number($('histVelocity').value)||0;
+  const devs = Number($('histDevs').value)||1;
+  const days = Number($('histDays').value)||1;
+  const f = Number($('histFocus').value)||1;
+  return devs*days*f > 0 ? v/(devs*days*f) : 0;
+}
+
+function calc() {
+  $('focusLabel').textContent = Math.round((Number($('focus').value)||0)*100)+'%';
+  $('histFocusLabel').textContent = Math.round((Number($('histFocus').value)||0)*100)+'%';
+
+  const sprintDays = Number($('sprintDays').value)||0;
+  const focus = Number($('focus').value)||1;
+
+  let totalAvail = 0;
+  const labels = [], data = [];
+
+  state.devs.forEach((d, i)=>{
+    const raw = Math.max(0, sprintDays - (Number(d.vac)||0));
+    const avail = raw * focus;
+    d.avail = avail;
+    totalAvail += avail;
+    labels.push(d.name);
+    data.push(Number(avail.toFixed(2)));
+    const cell = $(`avail-${i}`);
+    if (cell) cell.textContent = avail.toFixed(2);
+  });
+
+  const mode = $('mode').value;
+  const ppd = (mode === 'historical') ? ppdFromHistorical() : (Number($('assumedPpd').value)||0);
+  const recommended = totalAvail * ppd;
+  const avgStory = Math.max(0.5, Number($('avgStory').value)||0.5);
+  const stories = Math.max(0, Math.round(recommended / avgStory));
+
+  $('ppd').textContent = ppd.toFixed(2);
+  $('effectiveCapacity').textContent = totalAvail.toFixed(2);
+  $('recommendedPoints').textContent = recommended.toFixed(1);
+  $('suggestedStories').textContent = stories.toString();
+  $('notes').textContent =
+    (mode==='historical')
+      ? `PPD from history = Velocity / (Devs × Days × Focus) = ${$('histVelocity').value} / (${$('histDevs').value} × ${$('histDays').value} × ${$('histFocus').value})`
+      : `PPD is assumed at ${ppd.toFixed(2)}.`;
+
+  updateCharts(labels, data, recommended, stories*avgStory);
+}
+
+let availChart, pointsChart;
+function updateCharts(labels, data, recPoints, storyPoints) {
+  const ctx1 = document.getElementById('availChart').getContext('2d');
+  const ctx2 = document.getElementById('pointsChart').getContext('2d');
+
+  if (availChart) availChart.destroy();
+  if (pointsChart) pointsChart.destroy();
+
+  availChart = new Chart(ctx1, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Avail. dev-days', data }] },
+    options: { responsive:true, plugins:{legend:{display:true}} }
+  });
+
+  pointsChart = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: ['Recommended SP', 'Stories × Avg SP'],
+      datasets: [{ label: 'Story Points', data: [Number(recPoints.toFixed(1)), Number(storyPoints.toFixed(1))] }]
+    },
+    options: { responsive:true, plugins:{legend:{display:true}} }
+  });
+}
+
+function exportCsv() {
+  const mode = $('mode').value;
+  const ppd = (mode==='historical') ? ppdFromHistorical() : (Number($('assumedPpd').value)||0);
+  const effective = state.devs.reduce((s,d)=>s+d.avail,0);
+  const recommended = effective * ppd;
+  const avgStory = Math.max(0.5, Number($('avgStory').value)||0.5);
+  const stories = Math.round(recommended/avgStory);
+
+  let csv = 'Developer,VacationDays,AvailDevDays\n';
+  state.devs.forEach(d=> csv += `${d.name},${d.vac},${d.avail.toFixed(2)}\n`);
+  csv += `\nEffectiveCapacity,${effective.toFixed(2)}\n`;
+  csv += `PointsPerDevDay,${ppd.toFixed(2)}\n`;
+  csv += `RecommendedStoryPoints,${recommended.toFixed(1)}\n`;
+  csv += `SuggestedStories,${stories}\n`;
+
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'sprint_plan.csv';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+function exportPdf() {
+  // Export only the main container for a clean page
+  const element = document.getElementById('pageRoot');
+  const opt = {
+    margin: [14, 14, 14, 14], // mm
+    filename: 'sprint_plan.pdf',
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'] }
+  };
+  // small delay to ensure charts have rendered
+  setTimeout(() => html2pdf().set(opt).from(element).save(), 100);
+}
+
+function printPdf() { window.print(); }
+
+// Wire up events
+$('teamSize').addEventListener('input', e=> setTeamSize(e.target.value));
+['sprintDays','focus','mode','histVelocity','histDevs','histDays','histFocus','assumedPpd','avgStory']
+  .forEach(id => $(id).addEventListener('input', calc));
+$('autofill').addEventListener('click', ()=>{ state.devs.forEach((d,i)=> d.name = `Dev ${i+1}`); renderDevRows(); });
+$('calc').addEventListener('click', calc);
+$('calcTop').addEventListener('click', calc);
+$('exportCsv').addEventListener('click', exportCsv);
+$('exportCsvTop').addEventListener('click', exportCsv);
+$('exportPdf').addEventListener('click', exportPdf);
+$('exportPdfTop').addEventListener('click', exportPdf);
+$('printPdf').addEventListener('click', printPdf);
+
+// Init
+setTeamSize($('teamSize').value);
+calc();
+</script>
+</body>
+</html>
