@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NRW Home/Office Quota Planner — Single‑File</title>
+<style>
+  :root{
+    --bg:#0b1020;         /* app background */
+    --card:#121836;       /* panels */
+    --muted:#8fa0c9;      /* muted text */
+    --text:#e8eeff;       /* main text */
+    --accent:#6aa6ff;     /* buttons */
+
+    /* Legend colors (user configurable) */
+    --office:#3ea0ff;     /* blue */
+    --holiday:#ff6b6b;    /* red */
+    --vacation:#9aa3af;   /* gray */
+    --weekend:#2a2f4a;    /* dark gray */
+    --asof-outline:#ffffff; /* outline */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:linear-gradient(180deg,#0b1020,#0a0f1c 60%);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
+  h1{font-size:24px;margin:0 0 12px;letter-spacing:.3px}
+  h2{font-size:16px;margin:0 0 8px;color:var(--muted)}
+  .container{max-width:1200px;margin:24px auto;padding:0 16px}
+  .grid{display:grid;gap:12px}
+  .two{grid-template-columns:1fr 1fr}
+  .four{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px;box-shadow:0 8px 22px rgba(0,0,0,.25)}
+  label{display:inline-block;margin:0 8px 8px 0;color:var(--muted)}
+  input[type="number"],input[type="date"],input[type="text"],select{background:#0e1430;color:var(--text);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:8px 10px}
+  input[type="color"]{height:32px;width:46px;border:none;background:transparent}
+  .btn{appearance:none;border:1px solid transparent;background:var(--accent);color:#091124;padding:9px 14px;border-radius:12px;font-weight:600;cursor:pointer}
+  .btn.secondary{background:transparent;border-color:rgba(255,255,255,.18);color:var(--text)}
+  .btn.ghost{background:transparent;color:var(--muted);border-color:transparent}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .pill{display:inline-flex;align-items:center;gap:8px;background:#10173a;border:1px solid rgba(255,255,255,.1);padding:8px 10px;border-radius:999px}
+  .inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+  /* Calendar */
+  .calendar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .month{background:#0f1634;border:1px solid rgba(255,255,255,.06);border-radius:14px;overflow:hidden}
+  .month h3{margin:0;padding:8px 10px;background:#0c1330;border-bottom:1px solid rgba(255,255,255,.06);font-size:15px;color:#c4cff7}
+  .weekdays,.days{display:grid;grid-template-columns:repeat(7,1fr)}
+  .weekdays div{padding:6px 4px;text-align:center;color:#7f8ab7;font-weight:600;font-size:12px}
+  .day{position:relative;min-height:46px;padding:6px;border:1px solid rgba(255,255,255,.04);font-weight:600}
+  .day.muted{opacity:.35}
+  .day .num{position:absolute;top:6px;right:6px;font-size:12px;color:#b6c3ee}
+  .day.office{background:color-mix(in oklab, var(--office) 22%, transparent)}
+  .day.holiday{background:color-mix(in oklab, var(--holiday) 24%, transparent)}
+  .day.vacation{background:color-mix(in oklab, var(--vacation) 28%, transparent)}
+  .day.weekend{background:color-mix(in oklab, var(--weekend) 36%, transparent)}
+  .day.asof{outline:2px solid var(--asof-outline);outline-offset:-2px}
+
+  .legend{display:flex;gap:10px;flex-wrap:wrap}
+  .legend .item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:#0f1634}
+  .swatch{width:16px;height:16px;border-radius:4px;border:1px solid rgba(255,255,255,.3)}
+
+  .vac-list{display:flex;flex-wrap:wrap;gap:8px}
+  .vac-item{background:#0e1533;border:1px dashed rgba(255,255,255,.18);padding:6px 10px;border-radius:999px}
+  .vac-item button{margin-left:8px}
+
+  /* Modal */
+  dialog{border:none;border-radius:14px;max-width:720px;width:min(92vw,720px);padding:0;background:#0f1634;color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  dialog::backdrop{background:rgba(0,0,0,.5)}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#0c1330;border-bottom:1px solid rgba(255,255,255,.06)}
+  .modal-body{padding:12px}
+  .range-picker{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .picker{background:#0e1430;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:8px}
+  .picker .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .picker .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .picker .cell{padding:8px;text-align:center;border-radius:8px;border:1px solid rgba(255,255,255,.06);cursor:pointer}
+  .picker .cell.muted{opacity:.4}
+  .picker .cell.selected{background:var(--accent);color:#0b1020;border-color:transparent}
+  .picker .cell.inrange{background:color-mix(in oklab, var(--accent) 25%, transparent)}
+  .modal-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,.06)}
+
+  .note{color:var(--muted);font-size:12px}
+
+  @media (max-width: 900px){
+    .calendar{grid-template-columns:1fr}
+    .two{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>NRW Home/Office Quota Planner</h1>
+    <div class="grid two">
+      <section class="card">
+        <h2>Inputs</h2>
+        <div class="grid four" style="align-items:end">
+          <label>Year<br><input id="year" type="number" min="2000" max="2100" /></label>
+          <label>As of<br><input id="asof" type="date" /></label>
+          <label>Current Home %<br><input id="currentPct" type="number" min="0" max="100" step="0.01" /></label>
+          <label>Target Home %<br><input id="targetPct" type="number" min="0" max="100" step="0.01" /></label>
+        </div>
+        <div style="height:8px"></div>
+        <div class="inline"><span class="note">Preferred office weekdays:</span>
+          <label><input class="wd" type="checkbox" data-wd="1"> Mon</label>
+          <label><input class="wd" type="checkbox" data-wd="2"> Tue</label>
+          <label><input class="wd" type="checkbox" data-wd="3"> Wed</label>
+          <label><input class="wd" type="checkbox" data-wd="4"> Thu</label>
+          <label><input class="wd" type="checkbox" data-wd="5"> Fri</label>
+        </div>
+        <div style="height:10px"></div>
+        <div class="inline">
+          <button id="recalc" class="btn">Refresh / Recalculate</button>
+          <button id="exportCsv" class="btn secondary">Export CSV</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Legend & Colors</h2>
+        <div class="legend">
+          <div class="item"><span class="swatch" id="swOffice" style="background:var(--office)"></span>Office <input type="color" id="colOffice"></div>
+          <div class="item"><span class="swatch" id="swHoliday" style="background:var(--holiday)"></span>Holiday <input type="color" id="colHoliday"></div>
+          <div class="item"><span class="swatch" id="swVacation" style="background:var(--vacation)"></span>Vacation <input type="color" id="colVacation"></div>
+          <div class="item"><span class="swatch" id="swWeekend" style="background:var(--weekend)"></span>Weekend <input type="color" id="colWeekend"></div>
+        </div>
+        <div style="height:8px"></div>
+        <p class="note">Change any color — the calendar updates instantly.</p>
+      </section>
+    </div>
+
+    <div class="grid two" style="margin-top:12px">
+      <section class="card">
+        <h2>Vacations</h2>
+        <div class="inline">
+          <button id="addVacation" class="btn">Add vacation range…</button>
+          <span class="note">Your vacations are excluded from working days and shown on the calendar.</span>
+        </div>
+        <div style="height:10px"></div>
+        <div id="vacList" class="vac-list"></div>
+      </section>
+
+      <section class="card">
+        <h2>Summary</h2>
+        <div id="summary" class="pill" style="min-height:40px">—</div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:12px">
+      <h2>Calendar</h2>
+      <div id="calendar" class="calendar"></div>
+    </section>
+  </div>
+
+  <!-- Vacation Date Range Picker Modal -->
+  <dialog id="vacModal">
+    <div class="modal-head">
+      <strong>Select vacation start & end</strong>
+      <button id="closeModal" class="btn ghost">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="range-picker">
+        <div class="picker">
+          <div class="nav">
+            <button class="btn secondary" id="prevMonth">◀</button>
+            <div><strong id="pickerLabel"></strong></div>
+            <button class="btn secondary" id="nextMonth">▶</button>
+          </div>
+          <div class="grid" id="pickerGrid"></div>
+          <div class="note" style="margin-top:6px">Click a date for <strong>start</strong>, then another for <strong>end</strong>. Click again to reset. <br><strong>Single day?</strong> Click one date and press <em>Add range</em>.</div>
+        </div>
+        <div class="picker">
+          <div style="margin:4px 0 8px"><strong>Chosen range</strong></div>
+          <div id="chosenRange" class="pill">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button id="cancelVac" class="btn secondary">Cancel</button>
+      <button id="applyVac" class="btn" disabled>Add range</button>
+    </div>
+  </dialog>
+
+<script>
+// ---------- Utilities ----------
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+
+const fmtISO = (d) => {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth()+1).padStart(2,'0');
+  const da = String(d.getUTCDate()).padStart(2,'0');
+  return `${y}-${m}-${da}`;
+};
+const fromISO = (s) => {
+  const [y,m,d] = s.split('-').map(Number);
+  return new Date(Date.UTC(y, m-1, d));
+};
+const addDays = (d, n) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()+n));
+
+function rangeDates(a,b){
+  const out=[]; let d=new Date(a);
+  while(d<=b){ out.push(new Date(d)); d=addDays(d,1);} return out;
+}
+
+// ---------- NRW Holidays ----------
+function easterSunday(year){
+  const a = year % 19;
+  const b = Math.floor(year/100);
+  const c = year % 100;
+  const d = Math.floor(b/4);
+  const e = b % 4;
+  const f = Math.floor((b+8)/25);
+  const g = Math.floor((b - f + 1)/3);
+  const h = (19*a + b - d - g + 15) % 30;
+  const i = Math.floor(c/4);
+  const k = c % 4;
+  const l = (32 + 2*e + 2*i - h - k) % 7;
+  const m = Math.floor((a + 11*h + 22*l)/451);
+  const month = Math.floor((h + l - 7*m + 114)/31);
+  const day = ((h + l - 7*m + 114) % 31) + 1;
+  return new Date(Date.UTC(year, month-1, day));
+}
+function nrwHolidays(year){
+  const hol = new Set();
+  const push = (y,m,d) => hol.add(fmtISO(new Date(Date.UTC(y,m-1,d))));
+  push(year,1,1);
+  push(year,5,1);
+  push(year,10,3);
+  push(year,11,1);
+  push(year,12,25);
+  push(year,12,26);
+  const easter = easterSunday(year);
+  const goodFri = addDays(easter, -2);
+  const easterMon = addDays(easter, 1);
+  const ascension = addDays(easter, 39);
+  const pentecostMon = addDays(easter, 50);
+  const corpusChristi = addDays(easter, 60);
+  [goodFri,easterMon,ascension,pentecostMon,corpusChristi].forEach(d=>hol.add(fmtISO(d)));
+  return hol;
+}
+
+// ---------- Working-days split ----------
+function isWorkingDay(d, holSet){
+  const wd = d.getUTCDay(); // 0 Sun..6 Sat
+  const isWeekend = (wd===0||wd===6);
+  return !isWeekend && !holSet.has(fmtISO(d));
+}
+
+function splitYear(year, asofISO, vacations){
+  const asof = fromISO(asofISO);
+  const hol = nrwHolidays(year);
+  const vacSet = new Set();
+  vacations.forEach(([s,e])=>{ rangeDates(fromISO(s), fromISO(e)).forEach(d=>vacSet.add(fmtISO(d))); });
+  const start = new Date(Date.UTC(year,0,1));
+  const end = new Date(Date.UTC(year,11,31));
+  let past=0, rem=0; const remDates=[];
+  for(const d of rangeDates(start,end)){
+    const iso = fmtISO(d);
+    if(vacSet.has(iso)) continue;
+    if(!isWorkingDay(d, hol)) continue;
+    if(d <= asof) past++; else { rem++; remDates.push(d); }
+  }
+  return {pastWorkingDays:past, remainingWorkingDays:rem, totalWorkingDays:past+rem, remainingWorkingDates:remDates};
+}
+
+// ---------- Planning ----------
+function computeRequiredDays(currentPct, split, targetPct){
+  const rp = currentPct/100, rt = targetPct/100;
+  const Dp = split.pastWorkingDays, Dr = split.remainingWorkingDays;
+  const Hp = rp * Dp;
+  const H_total_req = rt * (Dp + Dr);
+  const H_future_needed = H_total_req - Hp;
+  const H_future = Math.min(Math.max(H_future_needed,0), Dr);
+  const O_future = Math.round(Dr - H_future);
+  const H_future_round = Math.round(H_future);
+  const feasible = (H_future_needed >= 0 && H_future_needed <= Dr);
+  return {feasible, needOffice:O_future, needHome:H_future_round};
+}
+
+function evenSample(dates, n, exclude=new Set()){
+  const pool = dates.filter(d => !exclude.has(fmtISO(d)));
+  const m = pool.length;
+  if(n<=0||m===0) return [];
+  if(n>=m) return pool.slice();
+  if(n===1) return [pool[0]];
+  const chosen=[];
+  for(let i=0;i<n;i++){
+    const idx = Math.round(i*(m-1)/(n-1));
+    chosen.push(pool[idx]);
+  }
+  // de-dupe and backfill
+  const out=[]; const used=new Set();
+  for(const d of chosen){ const iso=fmtISO(d); if(!used.has(iso)){out.push(d); used.add(iso);} }
+  let i=0; while(out.length<n && i<m){ const iso=fmtISO(pool[i]); if(!used.has(iso)){out.push(pool[i]); used.add(iso);} i++; }
+  return out.sort((a,b)=>a-b);
+}
+
+function suggestOfficeDistribution(remainingDates, requiredOfficeDays, preferredWeekdays){
+  const all = [...remainingDates].sort((a,b)=>a-b);
+  if(requiredOfficeDays<=0 || all.length===0) return [];
+  const prefSet = new Set(preferredWeekdays);
+  //const prefDates = all.filter(d=> prefSet.has((d.getUTCDay()+6)%7) || prefSet.has(d.getUTCDay())); // accept 0..6; robust
+  const prefDates = all.filter(d => prefSet.has(d.getUTCDay()));
+  const take = Math.min(requiredOfficeDays, prefDates.length);
+  const selected = take>0 ? evenSample(prefDates, take) : [];
+  const needMore = requiredOfficeDays - selected.length;
+  if(needMore>0){
+    const exclude = new Set(selected.map(fmtISO));
+    selected.push(...evenSample(all, needMore, exclude));
+  }
+  return selected.sort((a,b)=>a-b);
+}
+
+// ---------- CSV Export ----------
+function downloadCSV(plan){
+  const {year, holidays, vacations, officeDates} = plan;
+  const start = new Date(Date.UTC(year,0,1));
+  const end = new Date(Date.UTC(year,11,31));
+  const vacSet = new Set(); vacations.forEach(([s,e])=>rangeDates(fromISO(s), fromISO(e)).forEach(d=>vacSet.add(fmtISO(d))));
+  const offSet = new Set(officeDates.map(fmtISO));
+  let rows = ["date,type"]; 
+  for(const d of rangeDates(start,end)){
+    const iso = fmtISO(d);
+    let typ = "home";
+    if(offSet.has(iso)) typ = "office";
+    else if(vacSet.has(iso)) typ = "vacation";
+    else if(holidays.has(iso)) typ = "holiday";
+    else if(d.getUTCDay()===0 || d.getUTCDay()===6) typ = "weekend";
+    rows.push(`${iso},${typ}`);
+  }
+  const blob = new Blob([rows.join("\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `nrw_plan_${year}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+// ---------- Calendar Rendering ----------
+function renderCalendar(state){
+  const el = $("#calendar");
+  el.innerHTML = "";
+  const {year, asofISO, holidays, vacations, officeDates} = state;
+  const vacSet = new Set(); vacations.forEach(([s,e])=>rangeDates(fromISO(s), fromISO(e)).forEach(d=>vacSet.add(fmtISO(d))));
+  const offSet = new Set(officeDates.map(fmtISO));
+  const asof = fromISO(asofISO);
+  const weekdayNames = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+  for(let m=0;m<12;m++){
+    const month = document.createElement('div'); month.className='month';
+    const title = document.createElement('h3'); title.textContent = new Date(Date.UTC(year,m,1)).toLocaleString(undefined,{month:'long', year:'numeric'}); month.appendChild(title);
+
+    const wk = document.createElement('div'); wk.className='weekdays';
+    weekdayNames.forEach(n=>{ const d=document.createElement('div'); d.textContent=n; wk.appendChild(d); });
+    month.appendChild(wk);
+
+    const days = document.createElement('div'); days.className='days';
+
+    const first = new Date(Date.UTC(year,m,1));
+    const firstWeekday = (first.getUTCDay()+6)%7; // 0 Mon..6 Sun
+    const daysInMonth = new Date(Date.UTC(year,m+1,0)).getUTCDate();
+
+    // leading blanks
+    for(let i=0;i<firstWeekday;i++){ const cell=document.createElement('div'); cell.className='day muted'; days.appendChild(cell); }
+
+    for(let d=1; d<=daysInMonth; d++){
+      const dt = new Date(Date.UTC(year,m,d));
+      const iso = fmtISO(dt);
+      const cell = document.createElement('div');
+      cell.className = 'day';
+      // flags
+      const isWeekend = (dt.getUTCDay()===0||dt.getUTCDay()===6);
+      if(isWeekend) cell.classList.add('weekend');
+      if(holidays.has(iso)) cell.classList.add('holiday');
+      if(vacSet.has(iso)) cell.classList.add('vacation');
+      if(offSet.has(iso)) cell.classList.add('office');
+      if(iso===fmtISO(asof)) cell.classList.add('asof');
+      const num=document.createElement('div'); num.className='num'; num.textContent=String(d); cell.appendChild(num);
+      days.appendChild(cell);
+    }
+
+    // trailing blanks to complete grid (optional)
+    const totalCells = firstWeekday + daysInMonth;
+    const trailing = (7 - (totalCells % 7)) % 7;
+    for(let i=0;i<trailing;i++){ const cell=document.createElement('div'); cell.className='day muted'; days.appendChild(cell); }
+
+    month.appendChild(days);
+    el.appendChild(month);
+  }
+}
+
+// ---------- Vacation Modal (Range Picker) ----------
+const vacModal = $("#vacModal");
+let pickerYear, pickerMonth; // 0-based month
+let pickStart = null, pickEnd = null;
+
+function openVacModal(anchorISO){
+  const d = anchorISO ? fromISO(anchorISO) : new Date();
+  pickerYear = d.getUTCFullYear(); pickerMonth = d.getUTCMonth();
+  pickStart = pickEnd = null; updateChosen();
+  renderPicker();
+  vacModal.showModal();
+}
+function closeVacModal(){ vacModal.close(); }
+
+function renderPicker(){
+  $("#pickerLabel").textContent = new Date(Date.UTC(pickerYear, pickerMonth, 1)).toLocaleString(undefined,{month:'long', year:'numeric'});
+  const grid = $("#pickerGrid"); grid.innerHTML="";
+  const names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  for(const n of names){ const h=document.createElement('div'); h.className='cell muted'; h.style.cursor='default'; h.textContent=n; grid.appendChild(h); }
+  const first = new Date(Date.UTC(pickerYear,pickerMonth,1));
+  const firstWeekday = (first.getUTCDay()+6)%7;
+  const dim = new Date(Date.UTC(pickerYear,pickerMonth+1,0)).getUTCDate();
+  for(let i=0;i<firstWeekday;i++){ const c=document.createElement('div'); c.className='cell muted'; c.textContent=''; grid.appendChild(c); }
+  for(let d=1; d<=dim; d++){
+    const dt = new Date(Date.UTC(pickerYear,pickerMonth,d));
+    const iso = fmtISO(dt);
+    const c = document.createElement('div'); c.className='cell'; c.textContent=String(d);
+    const selStart = pickStart && fmtISO(pickStart)===iso;
+    const selEnd = pickEnd && fmtISO(pickEnd)===iso;
+    const inRange = pickStart && pickEnd && dt>=pickStart && dt<=pickEnd;
+    if(selStart||selEnd) c.classList.add('selected');
+    else if(inRange) c.classList.add('inrange');
+    c.onclick = ()=>{
+      if(!pickStart || (pickStart && pickEnd)){
+        pickStart = dt; pickEnd = null;
+      } else if (dt < pickStart){
+        pickEnd = pickStart; pickStart = dt;
+      } else if (dt.getTime() === pickStart.getTime()){
+        pickStart = pickEnd = null; // reset
+      } else {
+        pickEnd = dt;
+      }
+      updateChosen(); renderPicker();
+    };
+    grid.appendChild(c);
+  }
+}
+
+function updateChosen(){
+  const label = $("#chosenRange");
+  if(pickStart && pickEnd){
+    label.textContent = `${fmtISO(pickStart)} to ${fmtISO(pickEnd)}`;
+    $("#applyVac").disabled=false;
+  } else if(pickStart){
+    label.textContent = `${fmtISO(pickStart)} (single day)`;
+    $("#applyVac").disabled=false; // allow single-day vacation
+  } else {
+    label.textContent = '—';
+    $("#applyVac").disabled=true;
+  }
+}
+
+$("#prevMonth").onclick = ()=>{ pickerMonth--; if(pickerMonth<0){pickerMonth=11; pickerYear--;} renderPicker(); };
+$("#nextMonth").onclick = ()=>{ pickerMonth++; if(pickerMonth>11){pickerMonth=0; pickerYear++;} renderPicker(); };
+$("#closeModal").onclick = closeVacModal;
+$("#cancelVac").onclick = closeVacModal;
+$("#applyVac").onclick = ()=>{
+  if(!pickStart && !pickEnd) return;
+  const sIso = fmtISO(pickStart);
+  const eIso = pickEnd ? fmtISO(pickEnd) : sIso; // single day if no end selected
+  state.vacations.push([sIso, eIso]);
+  closeVacModal();
+  renderVacations();
+  recalc();
+};
+
+// ---------- State & Wiring ----------
+const state = {
+  year: new Date().getUTCFullYear(),
+  asofISO: (()=>{const t=new Date(); return fmtISO(new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth(),t.getUTCDate())));})(),
+  currentPct: 69,
+  targetPct: 60,
+  preferredWeekdays: new Set([1,3]), // Tue/Thu by default (Mon=0)
+  vacations: [], // [[isoStart, isoEnd], ...]
+  holidays: new Set(),
+  remainingWorkingDates: [],
+  officeDates: [],
+  feasible: true,
+  needOffice: 0,
+  needHome: 0
+};
+
+function syncInputsToState(){
+  state.year = parseInt($("#year").value,10);
+  state.asofISO = $("#asof").value || state.asofISO;
+  state.currentPct = parseFloat($("#currentPct").value);
+  state.targetPct = parseFloat($("#targetPct").value);
+  const set = new Set(); $$(".wd").forEach(cb=>{ if(cb.checked){ set.add(parseInt(cb.dataset.wd,10)); } });
+  state.preferredWeekdays = set;
+}
+
+function syncStateToInputs(){
+  $("#year").value = state.year;
+  $("#asof").value = state.asofISO;
+  $("#currentPct").value = state.currentPct;
+  $("#targetPct").value = state.targetPct;
+  $$(".wd").forEach(cb=>{ cb.checked = state.preferredWeekdays.has(parseInt(cb.dataset.wd,10)); });
+}
+
+function recalc(){
+  const split = splitYear(state.year, state.asofISO, state.vacations);
+  state.holidays = nrwHolidays(state.year);
+  state.remainingWorkingDates = split.remainingWorkingDates;
+  const req = computeRequiredDays(state.currentPct, split, state.targetPct);
+  state.feasible = req.feasible; state.needOffice = req.needOffice; state.needHome = req.needHome;
+  state.officeDates = suggestOfficeDistribution(state.remainingWorkingDates, state.needOffice, state.preferredWeekdays);
+  renderSummary(split);
+  renderCalendar(state);
+}
+
+function renderSummary(split){
+  const el = $("#summary");
+  const text = `Past working days: ${split.pastWorkingDays} | Remaining: ${split.remainingWorkingDays} | `+
+               `Target home %: ${state.targetPct}% | Need Office (remaining): ${state.needOffice} | Need Home: ${state.needHome} | `+
+               `Feasible: ${state.feasible ? 'Yes' : 'No'}`;
+  el.textContent = text;
+}
+
+function renderVacations(){
+  const list = $("#vacList"); list.innerHTML = "";
+  state.vacations.forEach((r, idx)=>{
+    const chip = document.createElement('div'); chip.className='vac-item'; chip.textContent = `${r[0]} to ${r[1]}`;
+    const x = document.createElement('button'); x.className='btn ghost'; x.textContent='Remove'; x.onclick=()=>{ state.vacations.splice(idx,1); renderVacations(); recalc(); };
+    chip.appendChild(x); list.appendChild(chip);
+  });
+}
+
+// Inputs -> state
+$("#recalc").onclick = ()=>{ syncInputsToState(); recalc(); };
+$("#exportCsv").onclick = ()=>{ downloadCSV({year:state.year, holidays:state.holidays, vacations:state.vacations, officeDates:state.officeDates}); };
+$("#addVacation").onclick = ()=> openVacModal(state.asofISO);
+
+// Color pickers
+function bindColor(id, varName){
+  const el=$(id); const sw = id.replace('col','sw');
+  el.value = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue(varName).trim()||'#ffffff');
+  el.oninput = (e)=>{ document.documentElement.style.setProperty(varName, e.target.value); $(sw).style.background = e.target.value; renderCalendar(state); };
+}
+function rgbToHex(rgb){
+  if(rgb.startsWith('#')) return rgb; // already hex
+  const m = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/i);
+  if(!m) return '#ffffff';
+  const toHex = n=>('0'+parseInt(n,10).toString(16)).slice(-2);
+  return `#${toHex(m[1])}${toHex(m[2])}${toHex(m[3])}`;
+}
+bindColor('#colOffice','--office');
+bindColor('#colHoliday','--holiday');
+bindColor('#colVacation','--vacation');
+bindColor('#colWeekend','--weekend');
+
+// Init defaults
+(function init(){
+  // default Tue/Thu checked
+  $$(".wd").forEach(cb=>{ const v=parseInt(cb.dataset.wd,10); cb.checked = (v===1||v===3); });
+  syncStateToInputs();
+  renderVacations();
+  recalc();
+})();
+</script>
+</body>
+</html>
