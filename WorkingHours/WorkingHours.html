@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Work Hours Calculator</title>
+  <style>
+    :root{
+      --bg: #0b0f14;
+      --card: #121924;
+      --muted: #8aa0b4;
+      --text: #e8f0f7;
+      --accent: #4da3ff;
+      --accent-2: #7ee787;
+      --danger: #ff6b6b;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 20px;
+    }
+    html, body { height: 100%; }
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 80% -10%, #16324a 0%, transparent 60%),
+                  radial-gradient(900px 600px at -10% 120%, #182d40 0%, transparent 60%), var(--bg);
+      color: var(--text);
+      display:flex; align-items:center; justify-content:center; padding: 24px;
+    }
+    .wrap{ width: min(980px, 100%); }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    header{ padding: 24px 24px 0; }
+    h1{ margin:0; font-size: clamp(22px, 4vw, 32px); letter-spacing:.2px; }
+    p.lead{ margin:8px 0 0; color: var(--muted); }
+
+    .grid{ display:grid; grid-template-columns: 1fr; gap:16px; padding: 24px; }
+    @media (min-width: 720px){
+      .grid{ grid-template-columns: repeat(3, 1fr); }
+    }
+    .field{ background: var(--card); border:1px solid rgba(255,255,255,.06); border-radius: 16px; padding: 16px; }
+    .label{ display:flex; align-items:center; justify-content:space-between; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .hint{ font-size: 12px; color: var(--muted); opacity:.9 }
+    .row{ display:flex; gap:10px; align-items:center; }
+    input[type="time"], input[type="number"], input[type="text"]{
+      width:100%; border:1px solid rgba(255,255,255,.08); background:#0e1520; color: var(--text);
+      border-radius:12px; padding:12px 12px; font-size:16px; outline:none;
+    }
+    input::placeholder{ color:#58738f; }
+    input[type="number"]{ -moz-appearance: textfield; }
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button{ -webkit-appearance: none; margin:0; }
+
+    .btn{
+      cursor:pointer; border:1px solid rgba(255,255,255,.14); background: #0f1724; color: var(--text);
+      padding:10px 14px; border-radius: 12px; font-weight:600; font-size:14px;
+      transition: transform .06s ease, border-color .2s ease, background .2s ease;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.28); }
+    .btn-primary{ background: linear-gradient(180deg, #1c2e46, #0f2035); border-color:#335784; }
+    .btn-ghost{ background: transparent; }
+
+    .result{
+      padding: 0 24px 24px; display:grid; gap:16px;
+    }
+    .callout{
+      background: linear-gradient(180deg, rgba(77,163,255,.07), rgba(77,163,255,.03));
+      border: 1px solid rgba(77,163,255,.35); padding:16px; border-radius:16px;
+    }
+    .ok{ border-color: rgba(126,231,135,.4); background: linear-gradient(180deg, rgba(126,231,135,.08), rgba(126,231,135,.03)); }
+    .warn{ border-color: rgba(255,107,107,.35); background: linear-gradient(180deg, rgba(255,107,107,.08), rgba(255,107,107,.03)); }
+
+    .meta{ color: var(--muted); font-size: 13px; }
+    .kpi{ font-size: clamp(22px, 3vw, 28px); font-weight:800; letter-spacing:.3px; }
+    .mono{ font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .flex{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+
+    footer{ padding: 0 24px 24px; color: var(--muted); font-size:12px; text-align:center; }
+    a{ color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="region" aria-label="Work Hours Calculator">
+      <header>
+        <h1>Work Hours Calculator</h1>
+        <p class="lead">Enter your start time, break, and (optionally) finish time. I’ll calculate your total hours — or tell you when you can leave.</p>
+      </header>
+
+      <div class="grid" id="inputs">
+        <div class="field">
+          <div class="label">
+            <span>Start time</span>
+            <button class="btn btn-ghost" id="setStartNow" type="button" aria-label="Set start to now">Now</button>
+          </div>
+          <div class="row">
+            <input id="start" type="time" step="60" required />
+          </div>
+          <div class="hint">Example: 08:30</div>
+        </div>
+
+        <div class="field">
+          <div class="label">
+            <span>Break duration (minutes)</span>
+            <button class="btn btn-ghost" id="setBreak30" type="button" aria-label="Set break to 30 minutes">+30</button>
+          </div>
+          <input id="break" type="number" min="0" step="5" placeholder="30" />
+          <div class="hint">Paid or unpaid breaks you didn’t work.</div>
+        </div>
+
+        <div class="field">
+          <div class="label">
+            <span>Finish time (optional)</span>
+            <button class="btn btn-ghost" id="setEndNow" type="button" aria-label="Set finish to now">Now</button>
+          </div>
+          <input id="end" type="time" step="60" />
+          <div class="hint">Leave empty to get a suggested leaving time.</div>
+        </div>
+
+        <div class="field" style="grid-column: 1 / -1">
+          <div class="label">
+            <span>Target work duration</span>
+            <button class="btn btn-ghost" id="toggleTarget" type="button" aria-label="Toggle target between 8:00 and 7:30">Toggle 8:00 ↔︎ 7:30</button>
+          </div>
+          <div class="row">
+            <input id="target" type="text" inputmode="numeric" placeholder="8:00" aria-label="Target duration in hours and minutes, e.g., 8:00" />
+            <button id="calc" class="btn btn-primary" type="button">Calculate</button>
+            <button id="reset" class="btn" type="button">Reset</button>
+          </div>
+          <div class="hint">Used only if no finish time is provided. Format HH:MM (defaults to 8:00).</div>
+        </div>
+      </div>
+
+      <div class="result" id="result" aria-live="polite"></div>
+      <footer>
+        <div>Times are for today and use your device’s local time zone.</div>
+      </footer>
+    </div>
+  </div>
+
+  <script>
+    // --- Utilities ---
+    const pad = n => String(n).padStart(2, '0');
+
+    function parseHHMM(str){
+      if(!str) return null;
+      const m = String(str).trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+      if(!m) return null;
+      return { h: +m[1], m: +m[2] };
+    }
+    function parseDurationHHMM(str){
+      if(!str) return null;
+      const m = String(str).trim().match(/^(\d{1,2}):(\d{2})$/);
+      if(!m) return null;
+      return (+m[1]) * 60 + (+m[2]); // minutes
+    }
+
+    function minutesBetween(startHM, endHM){
+      // difference in minutes, supporting next-day if end < start
+      let start = startHM.h * 60 + startHM.m;
+      let end = endHM.h * 60 + endHM.m;
+      if(end < start) end += 24*60; // passed midnight
+      return end - start;
+    }
+
+    function addMinutesToHM(hm, minutes){
+      let total = hm.h * 60 + hm.m + minutes;
+      total = ((total % (24*60)) + (24*60)) % (24*60); // wrap
+      return { h: Math.floor(total/60), m: total % 60 };
+    }
+
+    function hmToString(hm){ return `${pad(hm.h)}:${pad(hm.m)}`; }
+
+    function formatMinutes(mins){
+      const sign = mins < 0 ? '-' : '';
+      const abs = Math.abs(mins);
+      const h = Math.floor(abs/60), m = abs % 60;
+      return `${sign}${h}:${pad(m)}`;
+    }
+
+    function loadState(){
+      try{
+        const raw = localStorage.getItem('workhours:v1');
+        return raw ? JSON.parse(raw) : {};
+      }catch(e){ return {}; }
+    }
+
+    function saveState(obj){
+      try{ localStorage.setItem('workhours:v1', JSON.stringify(obj)); }catch(e){}
+    }
+
+    // --- DOM ---
+    const $start = document.getElementById('start');
+    const $end = document.getElementById('end');
+    const $break = document.getElementById('break');
+    const $target = document.getElementById('target');
+    const $result = document.getElementById('result');
+    const $calc = document.getElementById('calc');
+    const $reset = document.getElementById('reset');
+
+    // Quick actions
+    document.getElementById('setStartNow').onclick = () => {
+      const d = new Date();
+      $start.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      compute();
+    };
+    document.getElementById('setEndNow').onclick = () => {
+      const d = new Date();
+      $end.value = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      compute();
+    };
+    document.getElementById('setBreak30').onclick = () => {
+      $break.value = ($break.value ? parseInt($break.value, 10) : 0) + 30;
+      compute();
+    };
+    document.getElementById('toggleTarget').onclick = () => {
+      const v = ($target.value || '8:00').trim();
+      $target.value = v === '8:00' ? '7:30' : '8:00';
+      compute();
+    };
+
+    // Persist & react
+    [$start, $end, $break, $target].forEach(el => {
+      el.addEventListener('input', () => {
+        saveState({ start: $start.value, end: $end.value, brk: $break.value, target: $target.value });
+      });
+    });
+    $calc.onclick = compute;
+    $reset.onclick = () => {
+      $start.value = '';
+      $end.value = '';
+      $break.value = '';
+      $target.value = '';
+      saveState({});
+      $result.innerHTML = '';
+    };
+
+    function compute(){
+      const startHM = parseHHMM($start.value);
+      const endHM = parseHHMM($end.value);
+      const brkMin = Math.max(0, parseInt($break.value || '0', 10) || 0);
+
+      if(!startHM){
+        $result.innerHTML = card('warn', 'Missing start time', 'Please enter your start time (e.g., 08:30).');
+        return;
+      }
+
+      if(endHM){
+        const workedMin = Math.max(0, minutesBetween(startHM, endHM) - brkMin);
+        const kpi = formatMinutes(workedMin);
+        const hrs = (workedMin / 60).toFixed(2);
+        const lines = `
+          <div class="flex">
+            <div><strong>Total worked</strong></div>
+            <div class="mono">${kpi} (≈ ${hrs} h)</div>
+          </div>
+          <div class="meta">Start ${hmToString(startHM)} • End ${hmToString(endHM)} • Break ${brkMin} min</div>
+        `;
+        $result.innerHTML = card('ok', '✅ Hours calculated', lines);
+      } else {
+        // Need target duration
+        let targetMin = parseDurationHHMM($target.value || '8:00');
+        if(targetMin == null) targetMin = 8*60;
+        const leaveAt = addMinutesToHM(startHM, targetMin + brkMin);
+
+        const now = new Date();
+        const nowHM = { h: now.getHours(), m: now.getMinutes() };
+        const minsToGo = minutesBetween(nowHM, leaveAt);
+
+        const countdown = minsToGo > 0 ? `${formatMinutes(minsToGo)} remaining` : `${formatMinutes(minsToGo)} past`;
+        const tone = minsToGo > 0 ? 'ok' : 'warn';
+        const lines = `
+          <div class="flex">
+            <div><strong>You can leave at</strong></div>
+            <div class="kpi mono">${hmToString(leaveAt)}</div>
+          </div>
+          <div class="meta">Target ${formatMinutes(targetMin)} • Break ${brkMin} min • Started ${hmToString(startHM)}</div>
+          <div class="mono" style="opacity:.85">${countdown}</div>
+        `;
+        $result.innerHTML = card(tone, '🕒 Suggested leaving time', lines);
+      }
+
+      // persist latest
+      saveState({ start: $start.value, end: $end.value, brk: $break.value, target: $target.value });
+    }
+
+    function card(variant, title, html){
+      return `<div class="callout ${variant}">
+        <div style="font-weight:700; margin-bottom:6px">${title}</div>
+        <div>${html}</div>
+      </div>`;
+    }
+
+    // Init with defaults
+    (function init(){
+      const s = loadState();
+      if(s.start) $start.value = s.start; else {
+        // If the day just started and user opens the app, keep empty to force explicit start
+      }
+      if(s.end) $end.value = s.end;
+      if(s.brk) $break.value = s.brk;
+      if(s.target) $target.value = s.target; else $target.value = '8:00';
+
+      // Auto-recompute live every minute to keep countdown fresh
+      setInterval(() => {
+        if(!$end.value) compute();
+      }, 60 * 1000);
+
+      // Calculate once if we already have a start time or end time
+      if($start.value) compute();
+    })();
+  </script>
+</body>
+</html>
